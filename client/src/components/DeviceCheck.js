@@ -1,67 +1,37 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const DeviceCheck = () => {
   const navigate = useNavigate();
-  const videoRef = useRef(null);
   const [audioDevices, setAudioDevices] = useState([]);
   const [videoDevices, setVideoDevices] = useState([]);
   const [selectedAudio, setSelectedAudio] = useState('');
   const [selectedVideo, setSelectedVideo] = useState('');
-  const [stream, setStream] = useState(null);
 
+  // Enumerate available devices on mount.
   useEffect(() => {
+    const getDevices = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        console.log('[DeviceCheck] Devices:', devices);
+        const audioInputs = devices.filter(device => device.kind === 'audioinput');
+        const videoInputs = devices.filter(device => device.kind === 'videoinput');
+        setAudioDevices(audioInputs);
+        setVideoDevices(videoInputs);
+        if (audioInputs.length) setSelectedAudio(audioInputs[0].deviceId);
+        if (videoInputs.length) setSelectedVideo(videoInputs[0].deviceId);
+      } catch (error) {
+        console.error('[DeviceCheck] Error enumerating devices:', error);
+      }
+    };
     getDevices();
   }, []);
 
-  const getDevices = async () => {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const audioInputs = devices.filter(device => device.kind === 'audioinput');
-      const videoInputs = devices.filter(device => device.kind === 'videoinput');
-      setAudioDevices(audioInputs);
-      setVideoDevices(videoInputs);
-      if (audioInputs.length) setSelectedAudio(audioInputs[0].deviceId);
-      if (videoInputs.length) setSelectedVideo(videoInputs[0].deviceId);
-    } catch (error) {
-      console.error('Error getting devices:', error);
-    }
-  };
-
-  useEffect(() => {
-    if (selectedAudio && selectedVideo) {
-      startStream();
-    }
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [selectedAudio, selectedVideo]);
-
-  const startStream = async () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-    }
-    try {
-      const newStream = await navigator.mediaDevices.getUserMedia({
-        audio: { deviceId: selectedAudio },
-        video: { deviceId: selectedVideo }
-      });
-      setStream(newStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = newStream;
-      }
-    } catch (error) {
-      console.error('Error accessing media devices:', error);
-    }
-  };
-
+  // When the user clicks "Continue," save the selected devices and navigate.
   const handleContinue = () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-    }
-    localStorage.setItem('selectedDevices', JSON.stringify({ audio: selectedAudio, video: selectedVideo }));
+    const selected = { audio: selectedAudio, video: selectedVideo };
+    console.log('[DeviceCheck] Saving selected devices:', selected);
+    localStorage.setItem('selectedDevices', JSON.stringify(selected));
     navigate('/interview');
   };
 
@@ -72,9 +42,9 @@ const DeviceCheck = () => {
         <div className="space-y-4">
           <div>
             <label className="block mb-2">Microphone:</label>
-            <select 
-              value={selectedAudio} 
-              onChange={(e) => setSelectedAudio(e.target.value)} 
+            <select
+              value={selectedAudio}
+              onChange={(e) => setSelectedAudio(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded"
             >
               {audioDevices.map(device => (
@@ -86,9 +56,9 @@ const DeviceCheck = () => {
           </div>
           <div>
             <label className="block mb-2">Camera:</label>
-            <select 
-              value={selectedVideo} 
-              onChange={(e) => setSelectedVideo(e.target.value)} 
+            <select
+              value={selectedVideo}
+              onChange={(e) => setSelectedVideo(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded"
             >
               {videoDevices.map(device => (
@@ -98,8 +68,12 @@ const DeviceCheck = () => {
               ))}
             </select>
           </div>
-          <video ref={videoRef} autoPlay playsInline muted className="w-full max-w-md border border-gray-300 rounded" />
-          <button onClick={handleContinue} className="w-full bg-blue-500 text-white p-2 rounded">Continue to Interview</button>
+          <button
+            onClick={handleContinue}
+            className="w-full bg-blue-500 text-white p-2 rounded"
+          >
+            Continue to Interview
+          </button>
         </div>
       </div>
     </div>

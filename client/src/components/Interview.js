@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { saveInterviewFeedback } from './firebase';
-import { auth } from './firebase';
+import { saveInterviewFeedback, auth } from './firebase';
+import * as tf from '@tensorflow/tfjs';
+
+const emotionLabels = ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"];
 
 const Interview = () => {
   const navigate = useNavigate();
@@ -14,172 +16,261 @@ const Interview = () => {
   const [transcript, setTranscript] = useState('');
   const [showTranscript, setShowTranscript] = useState(true);
   const [isInterviewEnded, setIsInterviewEnded] = useState(false);
+  const [model, setModel] = useState(null);
+  const [emotionTimestamps, setEmotionTimestamps] = useState([]);
+  const [recordedChunks, setRecordedChunks] = useState([]);
 
   const videoRef = useRef(null);
-  const selfViewRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const chunksRef = useRef([]);
   const recognitionRef = useRef(null);
+  const startTimeRef = useRef(null);
+  const inferenceIntervalRef = useRef(null);
+  const localStreamRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
 
+  // Load TF.js model
+  useEffect(() => {
+    const loadModel = async () => {
+      try {
+        const model = await tf.loadLayersModel('/models/mobilenet_fer2013/model.json');
+        setModel(model);
+      } catch (error) {
+        console.error('Error loading model:', error);
+        alert('Failed to load AI model. Please refresh the page.');
+      }
+    };
+    loadModel();
+  }, []);
+
+  // Initialize interview data
   useEffect(() => {
     const data = JSON.parse(localStorage.getItem('interviewData'));
-    if (!data) {
-      navigate('/', { state: { error: 'Missing interview data. Please try again.' } });
-      return;
-    }
+    if (!data) navigate('/');
     setInterviewData(data);
     setTimeRemaining(data.duration * 60);
   }, [navigate]);
 
+  // Handle timer
   useEffect(() => {
-    if (timeRemaining > 0 && isRecording) {
-      const timer = setTimeout(() => setTimeRemaining(timeRemaining - 1), 1000);
-      return () => clearTimeout(timer);
-    } else if (timeRemaining === 0 && isRecording) {
-      endInterview();
+    let interval;
+    if (isRecording && timeRemaining > 0) {
+      interval = setInterval(() => {
+        setTimeRemaining(t => t - 1);
+      }, 1000);
     }
-  }, [timeRemaining, isRecording]);
+    return () => clearInterval(interval);
+  }, [isRecording, timeRemaining]);
 
-  const startInterview = async () => {
+  // Video setup
+  const startVideo = async () => {
     try {
-      await startRecording();
-      const response = await axios.post('/api/start-interview', interviewData);
-      setCurrentQuestion(response.data.question);
-      setInterviewHistory([{ type: 'question', content: response.data.question }]);
-      setIsRecording(true);
-    } catch (error) {
-      console.error('Error starting interview:', error);
-    }
-  };
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: true
+      });
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        videoRef.current.onloadedmetadata = () => videoRef.current.play();
       }
-      if (selfViewRef.current) {
-        selfViewRef.current.srcObject = stream;
-        selfViewRef.current.play();
-      }
-      mediaRecorderRef.current = new MediaRecorder(stream);
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunksRef.current.push(event.data);
-        }
-      };
-      mediaRecorderRef.current.start(1000);
-
-      startSpeechRecognition();
-    } catch (error) {
-      console.error('Error starting recording:', error);
+      localStreamRef.current = stream;
+    } catch (err) {
+      console.error('Camera error:', err);
+      alert('Enable camera/microphone permissions and use HTTPS!');
     }
   };
 
-  const startSpeechRecognition = () => {
+  // Emotion detection with timestamps
+  const detectEmotion = async () => {
+    if (!model || !videoRef.current) return;
+
+    try {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0);
+
+      let tensor = tf.browser.fromPixels(canvas)
+        .resizeNearestNeighbor([48, 48])
+        .toFloat()
+        .div(255.0)
+        .expandDims();
+
+      const prediction = await model.predict(tensor).data();
+      tensor.dispose();
+      
+      const emotion = emotionLabels[prediction.indexOf(Math.max(...prediction))];
+      const timestamp = Date.now() - startTimeRef.current;
+      setEmotionTimestamps(prev => [...prev, { emotion, timestamp }]);
+    } catch (err) {
+      console.error('Emotion detection failed:', err);
+    }
+  };
+
+  // Start interview
+  const startInterview = async () => {
+    await startVideo();
+    startTimeRef.current = Date.now();
+
+    // Setup media recorder
+    const stream = videoRef.current.srcObject;
+    mediaRecorderRef.current = new MediaRecorder(stream);
+    mediaRecorderRef.current.ondataavailable = (e) => {
+      if (e.data.size > 0) setRecordedChunks(prev => [...prev, e.data]);
+    };
+    mediaRecorderRef.current.start(1000);
+
+    // Setup speech recognition
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.continuous = true;
       recognitionRef.current.interimResults = true;
-      recognitionRef.current.onresult = (event) => {
-        const currentTranscript = Array.from(event.results)
+      recognitionRef.current.onresult = (e) => {
+        const transcript = Array.from(e.results)
           .map(result => result[0].transcript)
           .join('');
-        setTranscript(currentTranscript);
+        setTranscript(transcript);
       };
       recognitionRef.current.start();
-    } else {
-      console.error('Speech recognition not supported in this browser');
+    }
+
+    // Start question flow
+    try {
+      const response = await axios.post('/api/start-interview', interviewData);
+      setCurrentQuestion(response.data.question);
+      setInterviewHistory([{ type: 'question', content: response.data.question }]);
+      setIsRecording(true);
+      inferenceIntervalRef.current = setInterval(detectEmotion, 3000);
+    } catch (err) {
+      console.error('Interview start failed:', err);
+      alert('Failed to start interview. Please try again.');
     }
   };
 
+  // Handle answer submission
   const handleAnswerSubmit = async () => {
     if (!transcript.trim()) return;
-    setInterviewHistory(prev => [...prev, { type: 'answer', content: transcript }]);
+    
     try {
+      const newHistory = [...interviewHistory, { type: 'answer', content: transcript }];
       const response = await axios.post('/api/next-question', {
-        interviewHistory: [...interviewHistory, { type: 'answer', content: transcript }],
+        interviewHistory: newHistory,
         answer: transcript
       });
+      
       setCurrentQuestion(response.data.question);
-      setInterviewHistory(prev => [...prev, { type: 'question', content: response.data.question }]);
-      setTranscript('');
-    } catch (error) {
-      console.error('Error getting next question:', error);
+      setInterviewHistory([...newHistory, { type: 'question', content: response.data.question }]);
+      setTranscript(''); // Reset transcript
+    } catch (err) {
+      console.error('Answer submission error:', err);
     }
   };
 
+  // End interview
   const endInterview = async () => {
     setIsInterviewEnded(true);
     setIsRecording(false);
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+    clearInterval(inferenceIntervalRef.current);
+    localStreamRef.current?.getTracks().forEach(track => track.stop());
+    
+    if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
-    }
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-    }
-    
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-    const formData = new FormData();
-    formData.append('video', blob, 'interview.webm');
-    formData.append('interviewData', JSON.stringify({ interviewHistory }));
-    
-    try {
-      const response = await axios.post('/api/analyze-interview', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      
-      const user = auth.currentUser;
-      if (user) {
-        await saveInterviewFeedback(user.uid, response.data);
-      }
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const videoUrl = URL.createObjectURL(blob);
 
-      console.log("Navigating to feedback page with data:", response.data);
-      navigate('/feedback', { state: { feedback: response.data, interviewHistory } });
-    } catch (error) {
-      console.error('Error analyzing interview:', error);
-      alert('An error occurred while analyzing the interview. Please try again.');
-      navigate('/');
+      try {
+        const response = await axios.post('/api/analyze-interview', {
+          interviewHistory,
+          emotionPredictions: emotionTimestamps
+        });
+
+        if (auth.currentUser) {
+          await saveInterviewFeedback(auth.currentUser.uid, {
+            ...response.data,
+            videoUrl,
+            emotionTimestamps
+          });
+        }
+        
+        navigate('/feedback', { 
+          state: {
+            ...response.data,
+            videoUrl,
+            emotionTimestamps,
+            interviewHistory
+          }
+        });
+      } catch (err) {
+        console.error('Analysis failed:', err);
+        navigate('/');
+      }
     }
   };
 
-  if (isInterviewEnded) {
-    return <div>Interview ended. Analyzing results...</div>;
-  }
-
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <div className="bg-white p-8 rounded shadow-md w-full max-w-2xl">
-        <h2 className="text-2xl font-bold mb-4">Interview</h2>
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center p-4">
+      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl">
+        <h1 className="text-3xl font-bold text-gray-800 mb-6">Live Interview</h1>
+        
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          className={`w-full aspect-video rounded-lg mb-6 ${isRecording ? 'bg-gray-800' : 'hidden'}`}
+        />
+
         {!isRecording ? (
-          <button onClick={startInterview} className="w-full bg-blue-500 text-white p-2 rounded">Begin Interview</button>
+          <button
+            onClick={startInterview}
+            className="w-full py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Start Interview
+          </button>
         ) : (
-          <>
-            <div className="text-lg mb-4">Time Remaining: {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}</div>
-            <div className="flex justify-between mb-4">
-              <video ref={videoRef} autoPlay playsInline className="w-1/2 border border-gray-300 rounded" />
-              <video ref={selfViewRef} autoPlay playsInline muted className="w-1/2 border border-gray-300 rounded" />
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div className="text-xl font-semibold">
+                Time Remaining: {Math.floor(timeRemaining / 60)}:
+                {(timeRemaining % 60).toString().padStart(2, '0')}
+              </div>
+              <button
+                onClick={endInterview}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+              >
+                End Interview
+              </button>
             </div>
-            <div className="mb-4">
-              <h3 className="font-semibold">Current Question:</h3>
-              <p>{currentQuestion}</p>
+
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-2">Current Question:</h3>
+              <p className="text-gray-800">{currentQuestion}</p>
             </div>
+
             {showTranscript && (
-              <div className="mb-4">
-                <h3 className="font-semibold">Live Transcription:</h3>
-                <p>{transcript}</p>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-2">Live Transcription:</h3>
+                <p className="text-gray-800 whitespace-pre-wrap">{transcript}</p>
               </div>
             )}
-            <button onClick={() => setShowTranscript(!showTranscript)} className="w-full bg-blue-500 text-white p-2 rounded mb-4">
-              {showTranscript ? 'Hide Transcription' : 'Show Transcription'}
-            </button>
-            <button onClick={handleAnswerSubmit} className="w-full bg-green-500 text-white p-2 rounded mb-4">Next Question</button>
-            <button onClick={endInterview} className="w-full bg-red-500 text-white p-2 rounded">End Interview</button>
-          </>
+
+            <div className="flex gap-4">
+              <button
+                onClick={handleAnswerSubmit}
+                className="flex-1 py-3 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+              >
+                Submit Answer
+              </button>
+              <button
+                onClick={() => setShowTranscript(!showTranscript)}
+                className="px-6 py-3 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+              >
+                {showTranscript ? 'Hide Transcript' : 'Show Transcript'}
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
