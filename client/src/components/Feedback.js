@@ -108,6 +108,11 @@ const Feedback = () => {
             </div>
           </div>
         </div>
+        <div className="mt-8 text-center">
+          <Link to="/" className="text-blue-500 hover:underline">
+            Start a New Interview
+          </Link>
+        </div>
       </div>
     </div>
   );

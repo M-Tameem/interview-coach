@@ -80,7 +80,7 @@ const LandingPage = () => {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center">
       <div className="bg-white p-8 rounded shadow-md w-full max-w-lg">
         <h1 className="text-2xl font-bold mb-4">AI Interview Coach</h1>
-        <button onClick={handleGoogleSignIn} className="w-full bg-red-500 text-white p-2 rounded mb-4">Sign in with Google</button>
+        <button onClick={handleGoogleSignIn} className="w-full bg-red-500 text-white p-2 rounded mb-4">Sign in with Google (necessary to start interview)</button>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="text"
