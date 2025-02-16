@@ -154,19 +154,39 @@ const Interview = () => {
     if (!transcript.trim()) return;
     
     try {
-      const newHistory = [...interviewHistory, { type: 'answer', content: transcript }];
+      // Stop recognition to avoid capturing additional interim results.
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+  
+      const newHistory = [
+        ...interviewHistory,
+        { type: 'answer', content: transcript }
+      ];
+      
       const response = await axios.post('/api/next-question', {
         interviewHistory: newHistory,
         answer: transcript
       });
       
       setCurrentQuestion(response.data.question);
-      setInterviewHistory([...newHistory, { type: 'question', content: response.data.question }]);
-      setTranscript(''); // Reset transcript
+      setInterviewHistory([
+        ...newHistory,
+        { type: 'question', content: response.data.question }
+      ]);
+      
+      // Reset transcript
+      setTranscript('');
+  
+      // Restart recognition for the next question.
+      if (recognitionRef.current) {
+        recognitionRef.current.start();
+      }
     } catch (err) {
       console.error('Answer submission error:', err);
     }
   };
+  
 
   // End interview
   const endInterview = async () => {
