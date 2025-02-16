@@ -1,5 +1,7 @@
 import React, { useRef } from 'react';
 import { useLocation, Navigate } from 'react-router-dom';
+import { useLocation, Navigate, Link } from 'react-router-dom';
+
 
 const getEmotionColor = (emotion) => {
   const colors = {
