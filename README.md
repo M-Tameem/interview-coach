@@ -28,7 +28,7 @@ The facial emotion recognition model was trained from scratch on the [FER-2013 d
 ### Setup
 
 ```bash
-git clone https://github.com/elliewalsh/interview-coach.git
+git clone https://github.com/M-Tameem/interview-coach.git
 cd interview-coach
 npm install
 cd client && npm install && cd ..
