@@ -1,106 +1,58 @@
 # Interview Coach
 
-AI-powered mock interview app with real-time facial emotion detection. Users upload their resume, pick an interview type, and get GPT-generated questions + structured feedback at the end.
+**Live demo:** [interview-coach-95be.onrender.com](https://interview-coach-95be.onrender.com/)
 
-**Stack:** React · TensorFlow.js · Express · OpenAI · Firebase Auth/Firestore
+A full-stack AI interview practice app with real-time facial emotion detection. Users sign in, upload their resume, select an interview type, and practice with GPT-generated questions while a custom-trained emotion model analyzes their expressions via webcam. After the interview, they receive structured AI feedback including speech analysis, strengths, and areas for improvement.
 
----
+## Tech Stack
 
-## Prerequisites
+- **Frontend:** React 18, Tailwind CSS, TensorFlow.js
+- **Backend:** Node.js, Express
+- **AI/ML:** OpenAI API (GPT) for interview Q&A and feedback, custom MobileNetV2 model for emotion detection
+- **Auth & Data:** Firebase Authentication (Google OAuth), Cloud Firestore
+- **Speech:** Web Speech API for real-time transcription
+- **Deployment:** Docker, Render
+
+## Emotion Detection Model
+
+The facial emotion recognition model was trained from scratch on the [FER-2013 dataset](https://www.kaggle.com/datasets/msambare/fer2013) (~35k labeled facial expression images across 7 emotion classes). Training uses a MobileNetV2 backbone with a two-phase approach: frozen-base warmup followed by partial fine-tuning. The trained Keras model is then converted to TensorFlow.js format for in-browser inference. Training scripts are in [`fer2013-scripts/`](fer2013-scripts/).
+
+## Run Locally
+
+### Prerequisites
 
 - Node.js 18+
-- An [OpenAI API key](https://platform.openai.com/api-keys)
-- A [Firebase project](https://console.firebase.google.com/) with **Google sign-in** and **Firestore** enabled
+- An OpenAI API key
+- A Firebase project with Google sign-in and Firestore enabled
 
----
-
-## Local development
-
-### 1. Clone and install
+### Setup
 
 ```bash
-git clone https://github.com/your-username/interview-coach.git
+git clone https://github.com/elliewalsh/interview-coach.git
 cd interview-coach
 npm install
-cd client && npm install --legacy-peer-deps && cd ..
+cd client && npm install && cd ..
+
+# Configure environment variables
+cp server/.env.example server/.env    # add your OPENAI_API_KEY
+cp client/.env.example client/.env    # add your Firebase config values
 ```
 
-### 2. Configure environment variables
-
-```bash
-# Server
-cp server/.env.example server/.env
-# Fill in OPENAI_API_KEY (and optionally GPT_MODEL)
-
-# Client
-cp client/.env.example client/.env
-# Fill in all REACT_APP_FIREBASE_* values from your Firebase project settings
-```
-
-### 3. Run
-
-In two separate terminals:
+### Development
 
 ```bash
 # Terminal 1 — API server (port 5000)
 npm run dev
 
-# Terminal 2 — React dev server (port 3000, proxies /api to :5000)
+# Terminal 2 — React dev server (port 3000)
 cd client && npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
-
----
-
-## Docker (production build locally)
+### Docker
 
 ```bash
-# Build and start
 docker compose up --build
-
-# The app is served at http://localhost:5000
+# App runs at http://localhost:5000
 ```
 
-Requires a `server/.env` file with at minimum `OPENAI_API_KEY` set.
-
----
-
-## Deploy to Render
-
-1. Push the repo to GitHub.
-2. In the [Render dashboard](https://render.com), create a **New Web Service** connected to the repo.
-   Render will auto-detect `render.yaml` and pre-fill the settings.
-3. Set the secret environment variables in the Render dashboard:
-   - `OPENAI_API_KEY`
-   - All `REACT_APP_FIREBASE_*` keys
-4. Deploy. The build command installs deps, builds the React client, and the start command serves everything from the same Express process.
-
-> **Note:** `REACT_APP_*` env vars are baked into the React bundle at build time. They must be set in Render **before** the first deploy (or trigger a redeploy after adding them).
-
----
-
-## Environment variable reference
-
-### `server/.env`
-
-| Variable | Required | Description |
-|---|---|---|
-| `OPENAI_API_KEY` | ✅ | OpenAI secret key |
-| `GPT_MODEL` | optional | Model to use (default: `gpt-3.5-turbo`) |
-| `PORT` | optional | Server port (default: `5000`) |
-| `CORS_ORIGIN` | optional | Allowed origin in dev/split-service setups |
-
-### `client/.env`
-
-All `REACT_APP_FIREBASE_*` values come from **Firebase Console → Project Settings → Your Apps → SDK setup and configuration**.
-
----
-
-## Firebase setup
-
-1. Create a project at [console.firebase.google.com](https://console.firebase.google.com).
-2. Enable **Authentication → Google** sign-in.
-3. Enable **Firestore Database** in production mode (add security rules as needed).
-4. Register a **Web App** and copy the config values into `client/.env`.
-5. Add your domain (or `localhost`) to **Authentication → Authorized Domains**.
+Requires `server/.env` with at minimum `OPENAI_API_KEY` set. Client Firebase env vars must be in `client/.env` before building.
