@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: interview-coach
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node server/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: GPT_MODEL
+        value: gpt-3.5-turbo
+      # Set these in the Render dashboard (never commit real values):
+      - key: OPENAI_API_KEY
+        sync: false
+      # Firebase client config (baked into the React build — set before deploying)
+      - key: REACT_APP_FIREBASE_API_KEY
+        sync: false
+      - key: REACT_APP_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: REACT_APP_FIREBASE_PROJECT_ID
+        sync: false
+      - key: REACT_APP_FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: REACT_APP_FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: REACT_APP_FIREBASE_APP_ID
+        sync: false
+      - key: REACT_APP_FIREBASE_MEASUREMENT_ID
+        sync: false

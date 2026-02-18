@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - '5000:5000'
+    env_file:
+      - server/.env        # copy server/.env.example → server/.env and fill in values
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - uploads:/app/uploads
+    restart: unless-stopped
+
+volumes:
+  uploads:

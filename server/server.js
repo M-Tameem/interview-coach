@@ -6,23 +6,36 @@ const { OpenAI } = require('openai');
 const fs = require('fs');
 require('dotenv').config();
 
+if (!process.env.OPENAI_API_KEY) {
+  console.error('OPENAI_API_KEY is not set. Please copy server/.env.example to server/.env and fill in the values.');
+  process.exit(1);
+}
+
 const app = express();
 
-app.use(cors());
+// In production the React build is served by this same Express process (same origin),
+// so CORS is only needed during local development. CORS_ORIGIN can be set to restrict
+// it further when running the services separately.
+const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
+app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
 
-// Configure multer for resume uploads
+// Ensure the uploads directory exists
+const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
 const upload = multer({
-  dest: 'uploads/',
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB limit
+  dest: UPLOADS_DIR,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
 });
 
-// Initialize OpenAI with your API key from environment variables
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// API endpoint to parse resume PDF
+const GPT_MODEL = process.env.GPT_MODEL || 'gpt-3.5-turbo';
+
+// Parse uploaded resume PDF
 app.post('/api/parse-resume', upload.single('resume'), async (req, res) => {
   try {
     if (!req.file) {
@@ -31,9 +44,7 @@ app.post('/api/parse-resume', upload.single('resume'), async (req, res) => {
     const dataBuffer = fs.readFileSync(req.file.path);
     const pdfParse = require('pdf-parse');
     const data = await pdfParse(dataBuffer);
-
-    fs.unlinkSync(req.file.path); // Remove temp file
-
+    fs.unlinkSync(req.file.path);
     res.json({ text: data.text });
   } catch (error) {
     console.error('Error parsing resume:', error);
@@ -41,19 +52,19 @@ app.post('/api/parse-resume', upload.single('resume'), async (req, res) => {
   }
 });
 
-// API endpoint to start the interview
+// Start a new interview — returns the first question
 app.post('/api/start-interview', async (req, res) => {
   try {
     const { interviewType, resumeText, jobDescription } = req.body;
 
-    const prompt = `You are an AI interview coach conducting a ${interviewType} interview. 
+    const prompt = `You are an AI interview coach conducting a ${interviewType} interview.
 The candidate's resume states: "${resumeText}"
 The job description is: "${jobDescription}"
 Based on this information, provide the first relevant interview question.`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [{ role: "system", content: prompt }],
+      model: GPT_MODEL,
+      messages: [{ role: 'system', content: prompt }],
     });
 
     res.json({ question: completion.choices[0].message.content });
@@ -63,12 +74,12 @@ Based on this information, provide the first relevant interview question.`;
   }
 });
 
-// API endpoint to get the next interview question
+// Return the next interview question given the conversation history
 app.post('/api/next-question', async (req, res) => {
   try {
     const { interviewHistory, answer } = req.body;
 
-    const prompt = `You are conducting an interview. 
+    const prompt = `You are conducting an interview.
 Based on the following interview history and the candidate's last answer, provide the next relevant interview question.
 
 Interview history:
@@ -79,8 +90,8 @@ Candidate's last answer: ${answer}
 Next question:`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: prompt }],
+      model: GPT_MODEL,
+      messages: [{ role: 'user', content: prompt }],
     });
 
     res.json({ question: completion.choices[0].message.content });
@@ -90,12 +101,10 @@ Next question:`;
   }
 });
 
-// API endpoint to analyze the interview
+// Analyze the completed interview and return structured feedback
 app.post('/api/analyze-interview', async (req, res) => {
   try {
     const interviewData = req.body;
-
-    console.log('interview data:', interviewData);
 
     const prompt = `Based on the following interview history and the candidate's facial expression analysis, provide detailed feedback:
 
@@ -121,15 +130,15 @@ Format strictly as JSON with no markdown. Example:
 }`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: prompt }],
+      model: GPT_MODEL,
+      messages: [{ role: 'user', content: prompt }],
     });
 
     const feedback = JSON.parse(completion.choices[0].message.content);
 
     res.json({
       interviewHistory: interviewData.interviewHistory,
-      feedback: feedback
+      feedback,
     });
   } catch (error) {
     console.error('Error analyzing interview:', error);
@@ -137,12 +146,11 @@ Format strictly as JSON with no markdown. Example:
   }
 });
 
-// Serve static files from the React app build directory
-app.use(express.static(path.join(__dirname, '../client/build')));
+// Serve the React production build
+app.use(express.static(path.join(__dirname, '..', 'client', 'build')));
 
-// Catch-all handler to return the React app's index.html for any unknown routes
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
+  res.sendFile(path.join(__dirname, '..', 'client', 'build', 'index.html'));
 });
 
 const PORT = process.env.PORT || 5000;
