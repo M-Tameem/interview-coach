@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build: .
@@ -12,6 +10,12 @@ services:
     volumes:
       - uploads:/app/uploads
     restart: unless-stopped
+    # Ensure container logs are visible in docker compose up
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   uploads:

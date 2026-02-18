@@ -20,6 +20,14 @@ const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
 
+// Request logging
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  }
+  next();
+});
+
 // Ensure the uploads directory exists
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -131,10 +139,25 @@ Format strictly as JSON with no markdown. Example:
 
     const completion = await openai.chat.completions.create({
       model: GPT_MODEL,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [
+        { role: 'system', content: 'You are an interview coach. Always respond with valid JSON.' },
+        { role: 'user', content: prompt },
+      ],
+      response_format: { type: 'json_object' },
     });
 
-    const feedback = JSON.parse(completion.choices[0].message.content);
+    let feedback;
+    try {
+      feedback = JSON.parse(completion.choices[0].message.content);
+    } catch (parseErr) {
+      console.error('Failed to parse AI response as JSON:', completion.choices[0].message.content);
+      feedback = {
+        overallPerformance: completion.choices[0].message.content,
+        speechAnalysis: '',
+        areasOfImprovement: [],
+        strengths: [],
+      };
+    }
 
     res.json({
       interviewHistory: interviewData.interviewHistory,

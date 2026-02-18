@@ -9,7 +9,7 @@ RUN npm install
 
 # Install and build the React client
 COPY client/package*.json ./client/
-RUN cd client && npm install --legacy-peer-deps
+RUN cd client && npm install
 
 COPY client/ ./client/
 RUN cd client && npm run build
