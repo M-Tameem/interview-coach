@@ -5,11 +5,7 @@ uploads
 .git
 .gitignore
 *.md
-# Keep server secrets out of the image
 server/.env
 server/config/*.json
-# client/.env is intentionally included — Firebase client config is public-facing
-# (it's shipped to every browser in the JS bundle) and must be present at build time
-# so CRA can bake it into the React app.
 test.txt
 npm-debug.log*

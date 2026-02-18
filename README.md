@@ -41,10 +41,10 @@ cp client/.env.example client/.env    # add your Firebase config values
 ### Development
 
 ```bash
-# Terminal 1 — API server (port 5000)
+# Terminal 1 - API server (port 5000)
 npm run dev
 
-# Terminal 2 — React dev server (port 3000)
+# Terminal 2 - React dev server (port 3000)
 cd client && npm start
 ```
 

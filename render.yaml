@@ -15,7 +15,7 @@ services:
       # Set these in the Render dashboard (never commit real values):
       - key: OPENAI_API_KEY
         sync: false
-      # Firebase client config (baked into the React build — set before deploying)
+      # Firebase client config (baked into the React build - set before deploying)
       - key: REACT_APP_FIREBASE_API_KEY
         sync: false
       - key: REACT_APP_FIREBASE_AUTH_DOMAIN

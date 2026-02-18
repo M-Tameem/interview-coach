@@ -87,7 +87,7 @@ const Interview = () => {
     return () => clearInterval(interval);
   }, [isRecording, timeRemaining]);
 
-  // Video setup — uses selected devices from DeviceCheck
+  // Video setup - uses selected devices from DeviceCheck
   const startVideo = async () => {
     try {
       const devices = JSON.parse(localStorage.getItem('selectedDevices') || '{}');
@@ -138,7 +138,7 @@ const Interview = () => {
     }
   }, [model]);
 
-  // End interview — wrapped in useCallback to use in the timer effect
+  // End interview - wrapped in useCallback to use in the timer effect
   const endInterview = useCallback(async () => {
     if (endingRef.current || isInterviewEnded) return;
     endingRef.current = true;
@@ -157,7 +157,7 @@ const Interview = () => {
     const videoUrl = await new Promise((resolve) => {
       const recorder = mediaRecorderRef.current;
       if (!recorder || recorder.state === 'inactive') {
-        // Already stopped or never started — build blob from what we have
+        // Already stopped or never started - build blob from what we have
         const blob = new Blob(recordedChunksRef.current, { type: getMediaRecorderMimeType() || 'video/webm' });
         resolve(URL.createObjectURL(blob));
         return;
@@ -223,7 +223,7 @@ const Interview = () => {
     startTimeRef.current = Date.now();
     recordedChunksRef.current = [];
 
-    // Setup media recorder — use the stream from the ref (not the video element)
+    // Setup media recorder - use the stream from the ref (not the video element)
     const stream = localStreamRef.current;
     const mimeType = getMediaRecorderMimeType();
     const options = mimeType ? { mimeType } : {};
@@ -376,7 +376,7 @@ const Interview = () => {
         </div>
       )}
 
-      {/* Hidden video element — always mounted so the ref is available for startVideo */}
+      {/* Hidden video element - always mounted so the ref is available for startVideo */}
       <video
         ref={videoRef}
         autoPlay
@@ -428,7 +428,7 @@ const Interview = () => {
         ) : isRecording && (
           /* Active interview */
           <div className="w-full max-w-5xl flex flex-col lg:flex-row gap-4 animate-fade-in">
-            {/* Video feed — mirrors the hidden capture element */}
+            {/* Video feed - mirrors the hidden capture element */}
             <div className="flex-1 relative">
               <video
                 autoPlay

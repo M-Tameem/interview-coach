@@ -60,7 +60,7 @@ app.post('/api/parse-resume', upload.single('resume'), async (req, res) => {
   }
 });
 
-// Start a new interview — returns the first question
+// Start a new interview - returns the first question
 app.post('/api/start-interview', async (req, res) => {
   try {
     const { interviewType, resumeText, jobDescription } = req.body;
